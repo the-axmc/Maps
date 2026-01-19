@@ -21,7 +21,7 @@ type HistoryEntry =
   | { type: "country"; countryId: string; prev: CountryConfig }
   | { type: "marker"; markerId: string };
 
-const DEFAULT_FILL = "#d9c7a5";
+const DEFAULT_FILL = "#bfbfbf";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const getCountryTitle = (path: SVGPathElement) => {
@@ -46,6 +46,9 @@ export default function MapBuilder() {
   const [markerColor, setMarkerColor] = useState<string>("#e24b4b");
   const [markerMode, setMarkerMode] = useState<boolean>(false);
   const [canUndo, setCanUndo] = useState<boolean>(false);
+  const [shareUrl, setShareUrl] = useState<string>("");
+  const [shareCid, setShareCid] = useState<string>("");
+  const [isSharing, setIsSharing] = useState<boolean>(false);
   const [popupState, setPopupState] = useState<PopupState>({
     isVisible: false,
     title: "",
@@ -270,7 +273,7 @@ export default function MapBuilder() {
         const downloadUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = downloadUrl;
-        link.download = "custom-political-world-map.png";
+        link.download = "world-map.png";
         link.click();
         URL.revokeObjectURL(downloadUrl);
       });
@@ -280,6 +283,99 @@ export default function MapBuilder() {
 
     image.src = url;
   }, []);
+
+  const buildPNGBlob = useCallback(async () => {
+    const svgElement = svgRef.current;
+    if (!svgElement) return null;
+
+    setPopupState((prev) => ({ ...prev, isVisible: false }));
+
+    if (!svgElement.getAttribute("xmlns")) {
+      svgElement.setAttribute("xmlns", SVG_NS);
+    }
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgElement);
+    const svgBlob = new Blob([svgString], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const url = URL.createObjectURL(svgBlob);
+
+    const image = new Image();
+    const viewBox = svgElement.viewBox.baseVal;
+    const width = viewBox.width || svgElement.clientWidth || 2000;
+    const height = viewBox.height || svgElement.clientHeight || 1000;
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+
+        ctx.fillStyle = "#f3efe7";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+
+        canvas.toBlob((canvasBlob) => {
+          resolve(canvasBlob);
+        });
+      };
+
+      image.onerror = () => resolve(null);
+      image.src = url;
+    });
+
+    URL.revokeObjectURL(url);
+    return blob;
+  }, []);
+
+  const shareMap = useCallback(async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    setShareUrl("");
+    setShareCid("");
+
+    try {
+      const pngBlob = await buildPNGBlob();
+      if (!pngBlob) {
+        setIsSharing(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append(
+        "file",
+        new File([pngBlob], "custom-world-map.png", { type: "image/png" })
+      );
+
+      const response = await fetch("/api/ipfs", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        setIsSharing(false);
+        return;
+      }
+
+      const data = (await response.json()) as { cid: string; url: string };
+      setShareUrl(data.url);
+      setShareCid(data.cid);
+    } catch (error) {
+    } finally {
+      setIsSharing(false);
+    }
+  }, [buildPNGBlob, isSharing]);
+
+  const copyShareUrl = useCallback(async () => {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+  }, [shareUrl]);
 
   const handleColorChange = useCallback(
     (value: string) => {
@@ -485,6 +581,7 @@ export default function MapBuilder() {
               type="color"
               value={countryColor}
               onChange={(event) => handleColorChange(event.target.value)}
+              style={{ backgroundColor: countryColor }}
             />
           </div>
           <div className="field">
@@ -586,9 +683,49 @@ export default function MapBuilder() {
             <p>
               Map source: Wikimedia Commons
             </p>
-            <button className="primary compact" onClick={exportPNG}>
-              Export PNG
-            </button>
+            <div className="share-actions">
+              <button className="primary compact" onClick={exportPNG}>
+                Export PNG
+              </button>
+              {!shareUrl ? (
+                <button
+                  className="primary compact share"
+                  onClick={shareMap}
+                  disabled={isSharing}
+                >
+                  {isSharing ? "Preparing..." : "Share"}
+                </button>
+              ) : (
+                <>
+                  <button className="ghost compact" onClick={copyShareUrl}>
+                    Copy URL
+                  </button>
+                  <a
+                    className="ghost compact"
+                    href={`mailto:?subject=Custom%20World%20Map&body=${encodeURIComponent(
+                      shareUrl
+                    )}`}
+                  >
+                    Email
+                  </a>
+                  <a
+                    className="ghost compact"
+                    href={`https://t.me/share/url?url=${encodeURIComponent(
+                      shareUrl
+                    )}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    Telegram
+                  </a>
+                </>
+              )}
+            </div>
+            {shareUrl ? (
+              <p className="share-url">
+                {shareUrl} {shareCid ? `(${shareCid})` : ""}
+              </p>
+            ) : null}
           </div>
         </section>
       </main>

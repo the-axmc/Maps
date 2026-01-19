@@ -132,6 +132,10 @@ button.primary {
   color: #fff;
 }
 
+button.primary.share {
+  background: var(--accent-2);
+}
+
 button.compact {
   padding: 6px 14px;
   font-size: 12px;
@@ -254,6 +258,30 @@ button:active {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.share-url {
+  margin: 0;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+a.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--ink);
+  text-decoration: none;
 }
 
 @media (max-width: 960px) {
