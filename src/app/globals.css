@@ -162,6 +162,28 @@ textarea {
   background: #fff;
 }
 
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.color-input input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 textarea {
   resize: vertical;
 }
@@ -245,11 +267,45 @@ button:active {
   height: clamp(360px, 68vh, 760px);
 }
 
+.map-shell.is-zoomed .map-surface {
+  cursor: grab;
+}
+
+.map-shell.is-dragging .map-surface {
+  cursor: grabbing;
+}
+
 .map-toolbar {
   position: absolute;
   top: 14px;
   left: 16px;
   z-index: 2;
+}
+
+.map-toolbar-card {
+  background: rgba(254, 251, 246, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 12px 24px rgba(41, 33, 27, 0.12);
+}
+
+.map-toolbar-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map-toolbar-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .map-surface {
@@ -320,6 +376,12 @@ button:active {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.share-warning {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #a4582b;
 }
 
 .share-url {

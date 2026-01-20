@@ -1,6 +1,8 @@
-# Maps
+# Maps 🌍
 
 Maps is a web app for building and sharing interactive world maps. Users can color countries, add labels and links, drop markers, export a PNG, and generate shareable URLs for quick distribution.
+
+![World map preview](public/WorldMap.png)
 
 ## What it does
 
