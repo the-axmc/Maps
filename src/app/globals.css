@@ -24,15 +24,67 @@ body {
 }
 
 .page {
-  padding-bottom: 48px;
+  padding-bottom: 16px;
 }
 
 .hero {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  row-gap: 12px;
   align-items: flex-start;
-  gap: 24px;
-  padding: 32px 6vw 16px;
+  column-gap: 24px;
+  padding: 32px 6vw 24px;
+}
+
+.hero-title {
+  grid-column: 1 / -1;
+}
+
+.donate-slot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: 2 / 3;
+  grid-row: 2;
+}
+
+.donate-panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px;
+  box-shadow: 0 16px 30px rgba(41, 33, 27, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  width: max-content;
+}
+
+.donate-cta {
+  padding: 12px 24px;
+  font-size: 15px;
+}
+
+.donate-qr {
+  width: 140px;
+  height: 140px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.donate-controls {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.donate-control {
+  padding: 4px 8px;
+  font-size: 11px;
 }
 
 .eyebrow {
@@ -44,9 +96,13 @@ body {
 }
 
 h1 {
-  font-family: var(--font-display), "Playfair Display", serif;
+  font-family: var(--font-heading), "Atkinson Hyperlegible", var(--font-display), "Playfair Display", serif;
   font-size: clamp(30px, 4vw, 46px);
   margin: 0 0 12px;
+}
+
+.site-footer {
+  font-family: var(--font-heading), "Atkinson Hyperlegible", var(--font-display), "Playfair Display", serif;
 }
 
 .subhead {
@@ -290,8 +346,17 @@ a.ghost {
   }
 
   .hero {
-    flex-direction: column;
     align-items: flex-start;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    row-gap: 12px;
+    padding-bottom: 32px;
+  }
+
+  .donate-slot {
+    margin-top: 12px;
+    grid-column: 1 / -1;
+    grid-row: 3;
   }
 
   .map-meta {

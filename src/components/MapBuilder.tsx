@@ -35,6 +35,7 @@ const getCountryTitle = (path: SVGPathElement) => {
 };
 
 export default function MapBuilder() {
+  const donateAddress = "0x7dfaD7deD1B3351D8BA46703b47296056688c664";
   const [svgMarkup, setSvgMarkup] = useState<string>("");
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
   const [selectedCountryName, setSelectedCountryName] = useState<string>("");
@@ -50,6 +51,8 @@ export default function MapBuilder() {
   const [shareCid, setShareCid] = useState<string>("");
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [hasCopiedShareUrl, setHasCopiedShareUrl] = useState<boolean>(false);
+  const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false);
+  const [hasCopiedDonate, setHasCopiedDonate] = useState<boolean>(false);
   const [popupState, setPopupState] = useState<PopupState>({
     isVisible: false,
     title: "",
@@ -66,6 +69,7 @@ export default function MapBuilder() {
   const markerIdRef = useRef(0);
   const configsRef = useRef<Record<string, CountryConfig>>({});
   const copyTimeoutRef = useRef<number | null>(null);
+  const donateCopyTimeoutRef = useRef<number | null>(null);
   const markerStateRef = useRef({
     mode: markerMode,
     label: markerLabel,
@@ -85,6 +89,25 @@ export default function MapBuilder() {
   useEffect(() => {
     setHasCopiedShareUrl(false);
   }, [shareUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (donateCopyTimeoutRef.current) {
+        window.clearTimeout(donateCopyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const copyDonateAddress = useCallback(async () => {
+    await navigator.clipboard.writeText(donateAddress);
+    setHasCopiedDonate(true);
+    if (donateCopyTimeoutRef.current) {
+      window.clearTimeout(donateCopyTimeoutRef.current);
+    }
+    donateCopyTimeoutRef.current = window.setTimeout(() => {
+      setHasCopiedDonate(false);
+    }, 2000);
+  }, [donateAddress]);
 
   const getConfig = useCallback((countryId: string): CountryConfig => {
     if (!configsRef.current[countryId]) {
@@ -564,13 +587,48 @@ export default function MapBuilder() {
   return (
     <div className="page">
       <header className="hero">
-        <div>
+        <div className="hero-title">
           <p className="eyebrow">Atlas Studio</p>
           <h1>Build your custom World Map</h1>
-          <p className="subhead">
-            Click countries to colour them, attach notes and links, drop markers,
-            and export your custom map as a PNG.
-          </p>
+        </div>
+        <p className="subhead">
+          Click countries to colour them, attach notes and links, drop markers,
+          and export your custom map as a PNG.
+        </p>
+        <div className="donate-slot">
+          {isDonateOpen ? (
+            <div className="donate-panel">
+              <div className="donate-controls">
+                <button
+                  className="ghost compact donate-control"
+                  onClick={copyDonateAddress}
+                >
+                  {hasCopiedDonate ? "Copied!" : "Copy address"}
+                </button>
+                <button
+                  className="ghost compact donate-control"
+                  onClick={() => setIsDonateOpen(false)}
+                  aria-label="Close donation panel"
+                >
+                  ×
+                </button>
+              </div>
+              <img
+                className="donate-qr"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
+                  `ethereum:${donateAddress}`
+                )}`}
+                alt="Ethereum donation QR code"
+              />
+            </div>
+          ) : (
+            <button
+              className="primary donate-cta"
+              onClick={() => setIsDonateOpen(true)}
+            >
+              Donate
+            </button>
+          )}
         </div>
       </header>
 

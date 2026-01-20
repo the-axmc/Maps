@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Source_Sans_3 } from "next/font/google";
+import {
+  Atkinson_Hyperlegible,
+  Playfair_Display,
+  Source_Sans_3,
+} from "next/font/google";
 import "./globals.css";
 
 const displayFont = Playfair_Display({
@@ -10,6 +14,12 @@ const displayFont = Playfair_Display({
 const bodyFont = Source_Sans_3({
   subsets: ["latin"],
   variable: "--font-body",
+});
+
+const headingFont = Atkinson_Hyperlegible({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,7 +35,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${displayFont.variable} ${bodyFont.variable}`}>
+      <body
+        className={`${displayFont.variable} ${bodyFont.variable} ${headingFont.variable}`}
+      >
         {children}
       </body>
     </html>
