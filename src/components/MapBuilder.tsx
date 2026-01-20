@@ -49,6 +49,7 @@ export default function MapBuilder() {
   const [shareUrl, setShareUrl] = useState<string>("");
   const [shareCid, setShareCid] = useState<string>("");
   const [isSharing, setIsSharing] = useState<boolean>(false);
+  const [hasCopiedShareUrl, setHasCopiedShareUrl] = useState<boolean>(false);
   const [popupState, setPopupState] = useState<PopupState>({
     isVisible: false,
     title: "",
@@ -64,6 +65,7 @@ export default function MapBuilder() {
   const historyRef = useRef<HistoryEntry[]>([]);
   const markerIdRef = useRef(0);
   const configsRef = useRef<Record<string, CountryConfig>>({});
+  const copyTimeoutRef = useRef<number | null>(null);
   const markerStateRef = useRef({
     mode: markerMode,
     label: markerLabel,
@@ -79,6 +81,10 @@ export default function MapBuilder() {
       color: markerColor,
     };
   }, [markerMode, markerLabel, markerLink, markerColor]);
+
+  useEffect(() => {
+    setHasCopiedShareUrl(false);
+  }, [shareUrl]);
 
   const getConfig = useCallback((countryId: string): CountryConfig => {
     if (!configsRef.current[countryId]) {
@@ -375,6 +381,13 @@ export default function MapBuilder() {
   const copyShareUrl = useCallback(async () => {
     if (!shareUrl) return;
     await navigator.clipboard.writeText(shareUrl);
+    setHasCopiedShareUrl(true);
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = window.setTimeout(() => {
+      setHasCopiedShareUrl(false);
+    }, 2000);
   }, [shareUrl]);
 
   const handleColorChange = useCallback(
@@ -698,7 +711,7 @@ export default function MapBuilder() {
               ) : (
                 <>
                   <button className="ghost compact" onClick={copyShareUrl}>
-                    Copy URL
+                    {hasCopiedShareUrl ? "Copied!" : "Copy URL"}
                   </button>
                   <a
                     className="ghost compact"
@@ -718,14 +731,17 @@ export default function MapBuilder() {
                   >
                     Telegram
                   </a>
+                  <a
+                    className="ghost compact"
+                    href={`https://wa.me/?text=${encodeURIComponent(shareUrl)}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    Whatsapp
+                  </a>
                 </>
               )}
             </div>
-            {shareUrl ? (
-              <p className="share-url">
-                {shareUrl} {shareCid ? `(${shareCid})` : ""}
-              </p>
-            ) : null}
           </div>
         </section>
       </main>
