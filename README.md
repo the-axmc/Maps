@@ -1,13 +1,13 @@
 # Maps 🌍
 
-Maps is a web app for building and sharing interactive world maps. Users can color countries, add labels and links, drop markers, export a PNG, and generate shareable URLs for quick distribution.
+Maps is a web app for building and sharing interactive world maps. Users can colour countries, add labels and links, drop markers, export a PNG, and generate shareable URLs for quick distribution.
 
 ![World map preview](public/WorldMap.png)
 
 ## What it does
 
-- Customize country colors and popups on a world map
-- Add markers with labels, colors, and links
+- Customize country colours and popups on a world map
+- Add markers with labels, colours, and links
 - Export the map as an image
 - Share a generated URL or send via email/Telegram/WhatsApp
 
@@ -22,12 +22,6 @@ Maps is a web app for building and sharing interactive world maps. Users can col
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Then open http://localhost:3000.
