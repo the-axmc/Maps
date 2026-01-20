@@ -1166,8 +1166,8 @@ export default function MapBuilder() {
           <h1>Build your custom World Map</h1>
         </div>
         <p className="subhead">
-          Click countries to colour them, attach notes and links, drop markers,
-          and export your custom map as a PNG.
+          Click countries to colour them, attach notes or links, drop markers,
+          and export your custom map with or without labels as a PNG.
         </p>
         <div className="donate-slot">
           {isDonateOpen ? (
@@ -1218,20 +1218,20 @@ export default function MapBuilder() {
             />
           </div>
           <div className="field">
-            <label htmlFor="country-color">Fill color</label>
+            <label htmlFor="country-color">Fill colour</label>
             <div className="color-input">
               <span
                 className="color-swatch"
                 style={{ backgroundColor: countryColor }}
                 aria-hidden="true"
               />
-              <input
-                id="country-color"
-                type="color"
-                value={countryColor}
-                onChange={(event) => handleColorChange(event.target.value)}
-                aria-label="Choose fill color"
-              />
+            <input
+              id="country-color"
+              type="color"
+              value={countryColor}
+              onChange={(event) => handleColorChange(event.target.value)}
+                aria-label="Choose fill colour"
+            />
             </div>
           </div>
           <div className="field">
@@ -1295,13 +1295,13 @@ export default function MapBuilder() {
                 style={{ backgroundColor: markerColor }}
                 aria-hidden="true"
               />
-              <input
-                id="marker-color"
-                type="color"
-                value={markerColor}
-                onChange={(event) => setMarkerColor(event.target.value)}
+            <input
+              id="marker-color"
+              type="color"
+              value={markerColor}
+              onChange={(event) => setMarkerColor(event.target.value)}
                 aria-label="Choose marker color"
-              />
+            />
             </div>
           </div>
           <div className="actions">
@@ -1331,9 +1331,9 @@ export default function MapBuilder() {
             <div className="map-toolbar">
               <div className="map-toolbar-card">
                 <p className="map-toolbar-text">
-                  <span>Pick a country, then tap + to zoom in</span>
-                  <span>Tap - to step back out to the world view</span>
-                  <span>When zoomed, drag the map to look around</span>
+                  <span>Pick a country, then tap + to zoom in.</span>
+                  <span>Tap - to step back out to the world view.</span>
+                  <span>When zoomed, drag the map to look around.</span>
                 </p>
                 <div className="map-toolbar-actions">
                   <button
