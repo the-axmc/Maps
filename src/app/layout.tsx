@@ -27,28 +27,39 @@ const headingFont = Atkinson_Hyperlegible({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Custom Map Builder",
+  title: "Borderless Citizen | Build & Share Custom Maps",
   description:
-    "Create a custom world map with coloured countries, markers, and export or share it.",
+    "Design and share custom world and country maps with colours, markers, and labels. Export or share your map in seconds.",
   openGraph: {
-    title: "Custom Map Builder",
+    title: "Borderless Citizen | Build & Share Custom Maps",
     description:
-      "Create a custom world map with coloured countries, markers, and export or share it.",
+      "Design and share custom world and country maps with colours, markers, and labels. Export or share your map in seconds.",
+    siteName: "Borderless Citizen",
+    url: siteUrl,
     images: [
       {
         url: "/WorldMap.png",
         width: 1200,
         height: 630,
-        alt: "Custom world map preview",
+        alt: "Borderless Citizen map builder preview",
       },
     ],
+    type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Custom Map Builder",
+    title: "Borderless Citizen | Build & Share Custom Maps",
     description:
-      "Create a custom world map with coloured countries, markers, and export or share it.",
+      "Design and share custom world and country maps with colours, markers, and labels. Export or share your map in seconds.",
     images: ["/WorldMap.png"],
+  },
+  alternates: {
+    canonical: siteUrl,
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 
