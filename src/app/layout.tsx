@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Borderless Citizen | Build & Share Custom Maps",
     description:
-      "Design and share custom world and country maps with colours, markers, and labels. Export or share your map in seconds.",
+      "Design and share custom world and country maps with colours, markers, and labels. Interactive maps to export or share in seconds.",
     siteName: "Borderless Citizen",
     url: siteUrl,
     images: [
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
         url: "/WorldMap.png",
         width: 1200,
         height: 630,
-        alt: "Borderless Citizen map builder preview",
+        alt: "Interactive map builder preview",
       },
     ],
     type: "website",
