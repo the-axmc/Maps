@@ -21,6 +21,16 @@ type HistoryEntry =
   | { type: "country"; countryId: string; prev: CountryConfig }
   | { type: "marker"; markerId: string };
 
+type CountryOption = {
+  id: string;
+  label: string;
+  file: string;
+};
+
+type MapBuilderProps = {
+  availableCountries?: CountryOption[];
+};
+
 type MapKey =
   | "world"
   | "northAmerica"
@@ -81,13 +91,19 @@ const getCountryTitle = (element: SVGElement) => {
   const parentTitle = element.parentElement?.querySelector("title");
   if (parentTitle?.textContent) return parentTitle.textContent.trim();
 
+  const titleAttr = element.getAttribute("title");
+  if (titleAttr) return titleAttr.trim();
+
   return element.id || "Unknown";
 };
 
-export default function MapBuilder() {
+export default function MapBuilder({
+  availableCountries = [],
+}: MapBuilderProps) {
   const donateAddress = "0x7dfaD7deD1B3351D8BA46703b47296056688c664";
   const [svgMarkup, setSvgMarkup] = useState<string>("");
   const [activeMap, setActiveMap] = useState<MapKey>("world");
+  const [mapView, setMapView] = useState<string>("world");
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
   const [selectedCountryName, setSelectedCountryName] = useState<string>("");
   const [countryColor, setCountryColor] = useState<string>(DEFAULT_FILL);
@@ -122,12 +138,13 @@ export default function MapBuilder() {
   const mapSurfaceRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const markerLayerRef = useRef<SVGGElement | null>(null);
-  const historyRef = useRef<HistoryEntry[]>([]);
+  const historyRef = useRef<Record<string, HistoryEntry[]>>({});
   const markerIdRef = useRef(0);
-  const configsRef = useRef<Record<string, CountryConfig>>({});
+  const configsRef = useRef<Record<string, Record<string, CountryConfig>>>({});
   const copyTimeoutRef = useRef<number | null>(null);
   const donateCopyTimeoutRef = useRef<number | null>(null);
   const worldViewBoxRef = useRef<ViewBox | null>(null);
+  const worldReferenceRef = useRef<ViewBox | null>(null);
   const activeMapRef = useRef<MapKey>(activeMap);
   const zoomLevelRef = useRef(0);
   const labelLayerRef = useRef<SVGGElement | null>(null);
@@ -147,6 +164,11 @@ export default function MapBuilder() {
   const showPopupRef = useRef<
     (element: SVGGraphicsElement, event: MouseEvent) => void
   >(() => {});
+  const mapKey = mapView === "world" ? "world" : `country:${mapView}`;
+  const isWorldView = mapView === "world";
+  const mapSource = isWorldView
+    ? "/world.svg"
+    : `/countries/${encodeURIComponent(mapView)}`;
 
   const sanitizeSvg = useCallback((rawSvg: string) => {
     const parser = new DOMParser();
@@ -205,6 +227,13 @@ export default function MapBuilder() {
     return largest;
   }, []);
 
+  const getMapConfigs = useCallback(() => {
+    if (!configsRef.current[mapKey]) {
+      configsRef.current[mapKey] = {};
+    }
+    return configsRef.current[mapKey];
+  }, [mapKey]);
+
   const refreshLabels = useCallback(() => {
     const svgElement = svgRef.current;
     const labelLayer = labelLayerRef.current;
@@ -219,7 +248,8 @@ export default function MapBuilder() {
       (element) => !element.parentElement?.closest(".landxx")
     );
 
-    const coloredIds = Object.entries(configsRef.current)
+    const mapConfigs = getMapConfigs();
+    const coloredIds = Object.entries(mapConfigs)
       .filter(([, config]) => config.fill && config.fill !== ORIGINAL_FILL)
       .map(([key]) => key);
     if (selectedCountryId && !coloredIds.includes(selectedCountryId)) {
@@ -244,7 +274,7 @@ export default function MapBuilder() {
     const strokeWidth = (4 / zoomScale).toFixed(2);
 
     eligibleElements.forEach((element) => {
-      const config = configsRef.current[element.id];
+      const config = mapConfigs[element.id];
       const isSelected = selectedCountryId === element.id;
       const body = isSelected
         ? countryPopup.trim()
@@ -280,7 +310,14 @@ export default function MapBuilder() {
         `translate(${centerX.toFixed(2)} ${centerY.toFixed(2)})`
       );
     });
-  }, [countryPopup, getPrimaryLandBox, selectedCountryId, selectedCountryName, showLabels]);
+  }, [
+    countryPopup,
+    getMapConfigs,
+    getPrimaryLandBox,
+    selectedCountryId,
+    selectedCountryName,
+    showLabels,
+  ]);
 
 
   useEffect(() => {
@@ -290,6 +327,7 @@ export default function MapBuilder() {
   useEffect(() => {
     zoomLevelRef.current = zoomLevel;
   }, [zoomLevel]);
+
 
   const applyViewBox = useCallback((viewBox: ViewBox) => {
     const svgElement = svgRef.current;
@@ -446,30 +484,62 @@ export default function MapBuilder() {
     }, 2000);
   }, [donateAddress]);
 
-  const getConfig = useCallback((countryId: string): CountryConfig => {
-    if (!configsRef.current[countryId]) {
-      configsRef.current[countryId] = {
-        fill: ORIGINAL_FILL,
-        popupText: "",
-        link: "",
-      };
-    }
-    return configsRef.current[countryId];
-  }, []);
+  const getConfig = useCallback(
+    (countryId: string): CountryConfig => {
+      const mapConfigs = getMapConfigs();
+      if (!mapConfigs[countryId]) {
+        mapConfigs[countryId] = {
+          fill: ORIGINAL_FILL,
+          popupText: "",
+          link: "",
+        };
+      }
+      return mapConfigs[countryId];
+    },
+    [getMapConfigs]
+  );
 
   const updateUndoState = useCallback((history: HistoryEntry[]) => {
     setCanUndoCountry(history.some((item) => item.type === "country"));
     setCanUndoMarker(history.some((item) => item.type === "marker"));
   }, []);
 
-  const pushHistory = useCallback(
-    (entry: HistoryEntry) => {
-      const next = [...historyRef.current, entry].slice(-MAX_HISTORY);
-      historyRef.current = next;
+  const getHistoryForMap = useCallback(() => {
+    return historyRef.current[mapKey] ?? [];
+  }, [mapKey]);
+
+  const setHistoryForMap = useCallback(
+    (next: HistoryEntry[]) => {
+      historyRef.current[mapKey] = next;
       updateUndoState(next);
     },
-    [updateUndoState]
+    [mapKey, updateUndoState]
   );
+
+  const pushHistory = useCallback(
+    (entry: HistoryEntry) => {
+      const next = [...getHistoryForMap(), entry].slice(-MAX_HISTORY);
+      setHistoryForMap(next);
+    },
+    [getHistoryForMap, setHistoryForMap]
+  );
+
+  useEffect(() => {
+    updateUndoState(getHistoryForMap());
+  }, [getHistoryForMap, updateUndoState]);
+
+  useEffect(() => {
+    setSelectedCountryId(null);
+    setSelectedCountryName("");
+    setCountryPopup("");
+    setCountryLink("");
+    setZoomLevel(0);
+    setIsDraggingMap(false);
+    setPopupState((prev) => ({ ...prev, isVisible: false }));
+    if (!isWorldView) {
+      setActiveMap("world");
+    }
+  }, [isWorldView, mapView]);
 
   const updateCountryFill = useCallback((countryId: string, fill: string) => {
     const svgElement = svgRef.current;
@@ -822,36 +892,45 @@ export default function MapBuilder() {
   );
 
   const undoCountry = useCallback(() => {
-    const history = [...historyRef.current];
+    const history = [...getHistoryForMap()];
     const entryIndex = [...history]
       .reverse()
       .findIndex((item) => item.type === "country");
     if (entryIndex === -1) return;
     const index = history.length - 1 - entryIndex;
     const [entry] = history.splice(index, 1);
-    historyRef.current = history;
-    updateUndoState(history);
+    setHistoryForMap(history);
     if (!entry || entry.type !== "country") return;
 
     const config = getConfig(entry.countryId);
-    config.fill = ORIGINAL_FILL;
-    updateCountryFill(entry.countryId, ORIGINAL_FILL);
+    config.fill = entry.prev.fill;
+    config.popupText = entry.prev.popupText;
+    config.link = entry.prev.link;
+    updateCountryFill(entry.countryId, entry.prev.fill || ORIGINAL_FILL);
     if (selectedCountryId === entry.countryId) {
-      setCountryColor(ORIGINAL_FILL);
+      setCountryColor(entry.prev.fill || ORIGINAL_FILL);
+      setCountryPopup(entry.prev.popupText);
+      setCountryLink(entry.prev.link);
     }
     refreshLabels();
-  }, [getConfig, refreshLabels, selectedCountryId, updateCountryFill, updateUndoState]);
+  }, [
+    getConfig,
+    getHistoryForMap,
+    refreshLabels,
+    selectedCountryId,
+    setHistoryForMap,
+    updateCountryFill,
+  ]);
 
   const undoMarker = useCallback(() => {
-    const history = [...historyRef.current];
+    const history = [...getHistoryForMap()];
     const entryIndex = [...history]
       .reverse()
       .findIndex((item) => item.type === "marker");
     if (entryIndex === -1) return;
     const index = history.length - 1 - entryIndex;
     const [entry] = history.splice(index, 1);
-    historyRef.current = history;
-    updateUndoState(history);
+    setHistoryForMap(history);
     if (!entry || entry.type !== "marker") return;
     const markerLayer = markerLayerRef.current;
     if (!markerLayer) return;
@@ -861,11 +940,12 @@ export default function MapBuilder() {
     if (marker) {
       marker.remove();
     }
-  }, [updateUndoState]);
+  }, [getHistoryForMap, setHistoryForMap]);
 
   useEffect(() => {
     let isMounted = true;
-    fetch("/world.svg")
+    setSvgMarkup("");
+    fetch(mapSource)
       .then((response) => response.text())
       .then((data) => {
         if (!isMounted) return;
@@ -879,7 +959,7 @@ export default function MapBuilder() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [mapSource]);
 
   useEffect(() => {
     if (!svgMarkup) return;
@@ -894,6 +974,9 @@ export default function MapBuilder() {
     if (!svgElement) return;
 
     svgElement.setAttribute("id", "world-map");
+    svgElement
+      .querySelectorAll<SVGGraphicsElement>(".land, .landxx")
+      .forEach((element) => element.classList.add("landxx"));
     if (!svgElement.getAttribute("viewBox")) {
       const width = Number(svgElement.getAttribute("width")) || 2754;
       const height = Number(svgElement.getAttribute("height")) || 1398;
@@ -910,6 +993,9 @@ export default function MapBuilder() {
       height: baseViewBox.height,
     };
     worldViewBoxRef.current = worldViewBox;
+    if (isWorldView) {
+      worldReferenceRef.current = worldViewBox;
+    }
     if (activeMapRef.current === "world") {
       applyViewBox(worldViewBox);
     } else {
@@ -952,7 +1038,7 @@ export default function MapBuilder() {
       }
     `;
 
-    svgElement.prepend(injectedStyle);
+    svgElement.appendChild(injectedStyle);
 
     let labelLayer = svgElement.querySelector<SVGGElement>("#labels-layer");
     if (!labelLayer) {
@@ -978,6 +1064,59 @@ export default function MapBuilder() {
     const landElements = allLandElements.filter(
       (element) => !element.parentElement?.closest(".landxx")
     );
+
+    if (!isWorldView) {
+      const boundsTargets = landElements.length
+        ? landElements
+        : Array.from(
+            svgElement.querySelectorAll<SVGGraphicsElement>(
+              "path, polygon, rect, circle, ellipse"
+            )
+          ).filter((element) => !element.closest("defs"));
+
+      if (boundsTargets.length > 0) {
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        boundsTargets.forEach((element) => {
+          const box = element.getBBox();
+          if (!Number.isFinite(box.x) || !Number.isFinite(box.y)) return;
+          minX = Math.min(minX, box.x);
+          minY = Math.min(minY, box.y);
+          maxX = Math.max(maxX, box.x + box.width);
+          maxY = Math.max(maxY, box.y + box.height);
+        });
+
+        const width = Math.max(maxX - minX, 1);
+        const height = Math.max(maxY - minY, 1);
+        const padding = Math.max(width, height) * 0.02;
+        const paddedWidth = width + padding * 2;
+        const paddedHeight = height + padding * 2;
+        const reference = worldReferenceRef.current;
+        const targetAspect = reference
+          ? reference.width / reference.height
+          : paddedWidth / paddedHeight;
+        let finalWidth = paddedWidth;
+        let finalHeight = paddedHeight;
+        if (paddedWidth / paddedHeight > targetAspect) {
+          finalHeight = paddedWidth / targetAspect;
+        } else {
+          finalWidth = paddedHeight * targetAspect;
+        }
+        const centerX = minX + width / 2;
+        const centerY = minY + height / 2;
+        const fitViewBox: ViewBox = {
+          x: centerX - finalWidth / 2,
+          y: centerY - finalHeight / 2,
+          width: finalWidth,
+          height: finalHeight,
+        };
+        worldViewBoxRef.current = fitViewBox;
+        applyViewBox(fitViewBox);
+      }
+    }
 
     landElements.forEach((element) => {
       element.setAttribute("data-country", getCountryTitle(element));
@@ -1030,7 +1169,7 @@ export default function MapBuilder() {
       });
       svgElement.removeEventListener("click", handleSvgClick);
     };
-  }, [applyViewBox, svgMarkup]);
+  }, [applyViewBox, isWorldView, svgMarkup]);
 
   useEffect(() => {
     refreshLabels();
@@ -1039,12 +1178,16 @@ export default function MapBuilder() {
   useEffect(() => {
     const worldViewBox = worldViewBoxRef.current;
     if (!worldViewBox) return;
+    if (!isWorldView) {
+      applyViewBox(worldViewBox);
+      return;
+    }
     if (activeMap === "world") {
       applyViewBox(worldViewBox);
       return;
     }
     applyViewBox(toViewBox(CONTINENT_BOUNDS[activeMap], worldViewBox));
-  }, [activeMap, applyViewBox]);
+  }, [activeMap, applyViewBox, isWorldView]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -1069,8 +1212,23 @@ export default function MapBuilder() {
       event.preventDefault();
 
       const zoomingIn = event.deltaY < 0;
+      if (!isWorldView) {
+        if (zoomingIn) {
+          if (selectedCountryId) {
+            zoomToSelectedArea();
+          }
+        } else {
+          zoomOutToWorld();
+        }
+        return;
+      }
+
       if (zoomLevelRef.current > 0) {
-        if (!zoomingIn) {
+        if (zoomingIn) {
+          if (selectedCountryId) {
+            zoomToSelectedArea();
+          }
+        } else {
           zoomOutToWorld();
         }
         return;
@@ -1085,6 +1243,13 @@ export default function MapBuilder() {
         return;
       }
 
+      if (zoomingIn && activeMapRef.current !== "world") {
+        if (selectedCountryId) {
+          zoomToSelectedArea();
+        }
+        return;
+      }
+
       if (!zoomingIn && activeMapRef.current !== "world") {
         setActiveMap("world");
       }
@@ -1092,7 +1257,13 @@ export default function MapBuilder() {
 
     surface.addEventListener("wheel", handleWheel, { passive: false });
     return () => surface.removeEventListener("wheel", handleWheel);
-  }, [applyViewBox, getSvgPoint, zoomOutToWorld]);
+  }, [
+    getSvgPoint,
+    isWorldView,
+    selectedCountryId,
+    zoomOutToWorld,
+    zoomToSelectedArea,
+  ]);
 
   useEffect(() => {
     const surface = mapSurfaceRef.current;
@@ -1208,7 +1379,24 @@ export default function MapBuilder() {
         <section className="panel">
           <h2>Country Editor</h2>
           <div className="field">
-            <label htmlFor="selected-country">Selected country</label>
+            <label htmlFor="map-view">Map view</label>
+            <select
+              id="map-view"
+              value={mapView}
+              onChange={(event) => setMapView(event.target.value)}
+            >
+              <option value="world">World map</option>
+              {availableCountries.map((country) => (
+                <option key={country.id} value={country.file}>
+                  {country.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="selected-country">
+              {isWorldView ? "Selected country" : "Selected region"}
+            </label>
             <input
               id="selected-country"
               type="text"
