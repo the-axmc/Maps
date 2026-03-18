@@ -10,6 +10,8 @@ Maps is a web app for building and sharing interactive world maps. Users can col
 - Add markers with labels, colours, and links
 - Export the map as an image
 - Share a generated URL or send via email/Telegram/WhatsApp
+- Create an account, log in, and save maps with descriptions
+- View saved maps with preview image, saved date, and URL copy action
 
 ## Tech stack
 
@@ -17,6 +19,23 @@ Maps is a web app for building and sharing interactive world maps. Users can col
 - TypeScript
 - CSS modules/global styles
 - SVG-based map rendering
+- MongoDB (user auth + saved map records)
+
+## Environment variables
+
+Add these variables to `.env.local`:
+
+```bash
+MONGODB_URI=<your-mongodb-connection-string>
+MONGODB_DB_NAME=borderlesscitizen
+AUTH_SECRET=<long-random-secret>
+PINATA_JWT=<your-pinata-jwt>
+```
+
+Collections used:
+
+- `users`
+- `saved_maps`
 
 ## Development
 
