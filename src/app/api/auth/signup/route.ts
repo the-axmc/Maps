@@ -29,28 +29,36 @@ export async function POST(request: Request) {
     return new NextResponse("Password must be at least 8 characters.", { status: 400 });
   }
 
-  await ensureCollections();
-  const users = await getUsersCollection();
+  try {
+    await ensureCollections();
+    const users = await getUsersCollection();
 
-  const existing = await users.findOne({ email });
-  if (existing) {
-    return new NextResponse("Email is already registered.", { status: 409 });
+    const existing = await users.findOne({ email });
+    if (existing) {
+      return new NextResponse("Email is already registered.", { status: 409 });
+    }
+
+    const now = new Date();
+    const insertResult = await users.insertOne({
+      email,
+      passwordHash: hashPassword(password),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const token = createSessionToken({
+      userId: insertResult.insertedId.toHexString(),
+      email,
+    });
+
+    const response = NextResponse.json({ authenticated: true, email });
+    response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
+    return response;
+  } catch (error) {
+    console.error("Signup failed", error);
+    return new NextResponse(
+      "Signup failed. Check MongoDB connection and AUTH_SECRET.",
+      { status: 500 }
+    );
   }
-
-  const now = new Date();
-  const insertResult = await users.insertOne({
-    email,
-    passwordHash: hashPassword(password),
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  const token = createSessionToken({
-    userId: insertResult.insertedId.toHexString(),
-    email,
-  });
-
-  const response = NextResponse.json({ authenticated: true, email });
-  response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
-  return response;
 }

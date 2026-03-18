@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  SESSION_COOKIE_NAME,
+  verifySessionToken,
+} from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -17,6 +21,17 @@ const getClientIp = (request: Request) => {
   return request.headers.get("x-real-ip") || "unknown";
 };
 
+const getSessionTokenFromCookieHeader = (cookieHeader: string | null) => {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(";");
+  for (const cookie of cookies) {
+    const [rawName, ...rawValueParts] = cookie.trim().split("=");
+    if (rawName !== SESSION_COOKIE_NAME) continue;
+    return decodeURIComponent(rawValueParts.join("="));
+  }
+  return null;
+};
+
 export async function POST(request: Request) {
   const jwt = process.env.PINATA_JWT;
   if (!jwt) {
@@ -24,10 +39,15 @@ export async function POST(request: Request) {
   }
 
   const clientIp = getClientIp(request);
+  const token = getSessionTokenFromCookieHeader(request.headers.get("cookie"));
+  const session = verifySessionToken(token);
+  const isAuthenticated = Boolean(session);
   const now = Date.now();
-  const lastUpload = lastUploadByIp.get(clientIp);
-  if (lastUpload && now - lastUpload < RATE_LIMIT_WINDOW_MS) {
-    return new NextResponse("Rate limit exceeded", { status: 429 });
+  if (!isAuthenticated) {
+    const lastUpload = lastUploadByIp.get(clientIp);
+    if (lastUpload && now - lastUpload < RATE_LIMIT_WINDOW_MS) {
+      return new NextResponse("Rate limit exceeded", { status: 429 });
+    }
   }
 
   let formData: FormData;
@@ -72,7 +92,9 @@ export async function POST(request: Request) {
     return new NextResponse("Pinata did not return a CID", { status: 502 });
   }
 
-  lastUploadByIp.set(clientIp, now);
+  if (!isAuthenticated) {
+    lastUploadByIp.set(clientIp, now);
+  }
   const url = `${GATEWAY_BASE}/${cid}`;
   return NextResponse.json({ cid, url });
 }
