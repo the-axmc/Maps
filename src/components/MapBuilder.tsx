@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type CountryConfig = {
@@ -46,6 +47,13 @@ type ViewBox = {
   width: number;
   height: number;
 };
+
+type SessionStatus = {
+  authenticated: boolean;
+  email: string;
+};
+
+type SaveNoticeTone = "info" | "success" | "error";
 
 const DEFAULT_FILL = "#caa986";
 const ORIGINAL_FILL = "#bfbfbf";
@@ -115,10 +123,20 @@ export default function MapBuilder({
   const [markerColor, setMarkerColor] = useState<string>("#e24b4b");
   const [markerMode, setMarkerMode] = useState<boolean>(false);
   const [shareUrl, setShareUrl] = useState<string>("");
-  const [shareCid, setShareCid] = useState<string>("");
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [shareError, setShareError] = useState<string>("");
   const [hasCopiedShareUrl, setHasCopiedShareUrl] = useState<boolean>(false);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>({
+    authenticated: false,
+    email: "",
+  });
+  const [isCheckingSession, setIsCheckingSession] = useState<boolean>(true);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState<boolean>(false);
+  const [saveDescription, setSaveDescription] = useState<string>("");
+  const [isSavingMap, setIsSavingMap] = useState<boolean>(false);
+  const [showSaveAuthNotice, setShowSaveAuthNotice] = useState<boolean>(false);
+  const [saveNotice, setSaveNotice] = useState<string>("");
+  const [saveNoticeTone, setSaveNoticeTone] = useState<SaveNoticeTone>("info");
   const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false);
   const [hasCopiedDonate, setHasCopiedDonate] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(0);
@@ -143,6 +161,7 @@ export default function MapBuilder({
   const configsRef = useRef<Record<string, Record<string, CountryConfig>>>({});
   const copyTimeoutRef = useRef<number | null>(null);
   const donateCopyTimeoutRef = useRef<number | null>(null);
+  const saveNoticeTimeoutRef = useRef<number | null>(null);
   const worldViewBoxRef = useRef<ViewBox | null>(null);
   const worldReferenceRef = useRef<ViewBox | null>(null);
   const activeMapRef = useRef<MapKey>(activeMap);
@@ -462,6 +481,52 @@ export default function MapBuilder({
     setHasCopiedShareUrl(false);
   }, [shareUrl]);
 
+  const showTransientSaveNotice = useCallback(
+    (message: string, tone: SaveNoticeTone = "info") => {
+      setSaveNotice(message);
+      setSaveNoticeTone(tone);
+      if (saveNoticeTimeoutRef.current) {
+        window.clearTimeout(saveNoticeTimeoutRef.current);
+      }
+      saveNoticeTimeoutRef.current = window.setTimeout(() => {
+        setSaveNotice("");
+      }, 3500);
+    },
+    []
+  );
+
+  const loadSessionStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!response.ok) {
+        setSessionStatus({ authenticated: false, email: "" });
+        return;
+      }
+      const payload = (await response.json()) as {
+        authenticated?: boolean;
+        email?: string;
+      };
+      setSessionStatus({
+        authenticated: Boolean(payload.authenticated),
+        email: payload.email ?? "",
+      });
+    } catch {
+      setSessionStatus({ authenticated: false, email: "" });
+    } finally {
+      setIsCheckingSession(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSessionStatus();
+  }, [loadSessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus.authenticated) {
+      setShowSaveAuthNotice(false);
+    }
+  }, [sessionStatus.authenticated]);
+
   useEffect(() => {
     return () => {
       if (donateCopyTimeoutRef.current) {
@@ -470,8 +535,19 @@ export default function MapBuilder({
       if (copyTimeoutRef.current) {
         window.clearTimeout(copyTimeoutRef.current);
       }
+      if (saveNoticeTimeoutRef.current) {
+        window.clearTimeout(saveNoticeTimeoutRef.current);
+      }
     };
   }, []);
+
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setSessionStatus({ authenticated: false, email: "" });
+    setShowSaveAuthNotice(false);
+    setIsSaveDialogOpen(false);
+    showTransientSaveNotice("Logged out.", "info");
+  }, [showTransientSaveNotice]);
 
   const copyDonateAddress = useCallback(async () => {
     await navigator.clipboard.writeText(donateAddress);
@@ -813,52 +889,124 @@ export default function MapBuilder({
     return blob;
   }, []);
 
+  const uploadMapBlob = useCallback(async (pngBlob: Blob) => {
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([pngBlob], "custom-world-map.png", { type: "image/png" })
+    );
+
+    const response = await fetch("/api/ipfs", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error("Share limit reached. Please wait 24h and try again.");
+      }
+      const errorText = await response.text();
+      throw new Error(errorText || "Upload failed. Please try again.");
+    }
+
+    return (await response.json()) as { cid: string; url: string };
+  }, []);
+
   const shareMap = useCallback(async () => {
     if (isSharing) return;
     setIsSharing(true);
     setShareUrl("");
-    setShareCid("");
     setShareError("");
 
     try {
       const pngBlob = await buildPNGBlob();
       if (!pngBlob) {
+        setShareError("Unable to prepare map image.");
         setIsSharing(false);
         return;
       }
 
-      const formData = new FormData();
-      formData.append(
-        "file",
-        new File([pngBlob], "custom-world-map.png", { type: "image/png" })
-      );
-
-      const response = await fetch("/api/ipfs", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          setShareError("Share limit reached. Please wait 24h and try again.");
-        } else {
-          const errorText = await response.text();
-          setShareError(errorText || "Share failed. Please try again.");
-        }
-        setIsSharing(false);
-        return;
-      }
-
-      const data = (await response.json()) as { cid: string; url: string };
+      const data = await uploadMapBlob(pngBlob);
       setShareUrl(data.url);
-      setShareCid(data.cid);
     } catch (error) {
       console.error("Share upload failed", error);
-      setShareError("Share failed. Please try again.");
+      const message =
+        error instanceof Error ? error.message : "Share failed. Please try again.";
+      setShareError(message);
     } finally {
       setIsSharing(false);
     }
-  }, [buildPNGBlob, isSharing]);
+  }, [buildPNGBlob, isSharing, uploadMapBlob]);
+
+  const beginSaveMap = useCallback(() => {
+    if (isCheckingSession) return;
+    if (!sessionStatus.authenticated) {
+      setShowSaveAuthNotice(true);
+      setIsSaveDialogOpen(false);
+      return;
+    }
+    setShowSaveAuthNotice(false);
+    setIsSaveDialogOpen(true);
+  }, [isCheckingSession, sessionStatus.authenticated]);
+
+  const saveMap = useCallback(async () => {
+    if (!sessionStatus.authenticated || isSavingMap) return;
+    setIsSavingMap(true);
+
+    try {
+      const pngBlob = await buildPNGBlob();
+      if (!pngBlob) {
+        throw new Error("Unable to prepare map image.");
+      }
+      const upload = await uploadMapBlob(pngBlob);
+      const cid = upload.cid;
+      const url = upload.url;
+      setShareUrl(upload.url);
+
+      const response = await fetch("/api/maps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cid,
+          url,
+          description: saveDescription.trim(),
+        }),
+      });
+
+      if (response.status === 401) {
+        setSessionStatus({ authenticated: false, email: "" });
+        setIsSaveDialogOpen(false);
+        setShowSaveAuthNotice(true);
+        showTransientSaveNotice(
+          "Sign up to borderlesscitizen.org and access your saved maps.",
+          "info"
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Unable to save map.");
+      }
+
+      setSaveDescription("");
+      setIsSaveDialogOpen(false);
+      showTransientSaveNotice("Map saved. You can view it in Saved maps.", "success");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save map. Please try again.";
+      showTransientSaveNotice(message, "error");
+    } finally {
+      setIsSavingMap(false);
+    }
+  }, [
+    buildPNGBlob,
+    isSavingMap,
+    saveDescription,
+    sessionStatus.authenticated,
+    showTransientSaveNotice,
+    uploadMapBlob,
+  ]);
 
   const copyShareUrl = useCallback(async () => {
     if (!shareUrl) return;
@@ -1194,6 +1342,7 @@ export default function MapBuilder({
       if (event.key !== "Escape") return;
       setMarkerMode(false);
       setPopupState((prev) => ({ ...prev, isVisible: false }));
+      setIsSaveDialogOpen(false);
     };
 
     window.addEventListener("keydown", handleEscape);
@@ -1340,6 +1489,28 @@ export default function MapBuilder({
           Click countries to colour them, attach notes or links, drop markers,
           and export your custom map with or without labels as a PNG.
         </p>
+        <div className="hero-auth">
+          <Link className="ghost compact" href="/saved-maps">
+            Saved maps
+          </Link>
+          {sessionStatus.authenticated ? (
+            <>
+              <span className="helper">{sessionStatus.email}</span>
+              <button className="ghost compact" type="button" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link className="ghost compact" href="/auth?mode=signup&next=/">
+                Create account
+              </Link>
+              <Link className="ghost compact" href="/auth?mode=login&next=/">
+                Log in
+              </Link>
+            </>
+          )}
+        </div>
         <div className="donate-slot">
           {isDonateOpen ? (
             <div className="donate-panel">
@@ -1572,6 +1743,13 @@ export default function MapBuilder({
               <button className="primary compact" onClick={exportPNG}>
                 Export PNG
               </button>
+              <button
+                className="primary compact"
+                onClick={beginSaveMap}
+                disabled={isCheckingSession || isSavingMap}
+              >
+                {isSavingMap ? "Saving..." : "Save map"}
+              </button>
               {!shareUrl ? (
                 <button
                   className="primary compact share"
@@ -1614,12 +1792,72 @@ export default function MapBuilder({
                 </>
               )}
             </div>
+            {showSaveAuthNotice && !sessionStatus.authenticated ? (
+              <div className="save-auth-notice">
+                <p>
+                  Sign up to borderlesscitizen.org and access your saved maps.
+                </p>
+                <p className="helper">
+                  Already signed up?{" "}
+                  <Link href="/auth?mode=login&next=/">Log in</Link>.
+                </p>
+              </div>
+            ) : null}
+            {saveNotice ? (
+              <p className={`save-notice ${saveNoticeTone}`}>{saveNotice}</p>
+            ) : null}
             {shareError ? (
               <p className="share-warning">{shareError}</p>
             ) : null}
           </div>
         </section>
       </main>
+      {isSaveDialogOpen ? (
+        <div
+          className="save-modal-backdrop"
+          onClick={() => setIsSaveDialogOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="save-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Save map"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>Save map</h2>
+            <p className="helper">
+              Add a description so you can recognize this map in your saved
+              list.
+            </p>
+            <textarea
+              value={saveDescription}
+              onChange={(event) => setSaveDescription(event.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="Map description"
+            />
+            <div className="save-modal-actions">
+              <button
+                className="ghost compact"
+                type="button"
+                onClick={() => setIsSaveDialogOpen(false)}
+                disabled={isSavingMap}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary compact"
+                type="button"
+                onClick={saveMap}
+                disabled={isSavingMap}
+              >
+                {isSavingMap ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
